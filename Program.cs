@@ -6,6 +6,8 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Threading.Tasks;
 using System.IO;
 using NLog.Extensions.Logging;
+using System.Threading;
+using System.Collections.Generic;
 
 namespace CoreIotHubClient
 {
@@ -13,25 +15,32 @@ namespace CoreIotHubClient
     {
         static void Main(string[] args)
         {
-            var serviceProvider = BuildServiceProvider();
-
-            var app = serviceProvider.GetService<IotHubClient>();
-
-            Task.Run(() => app.Run()).Wait();
-        }
-        private static IServiceProvider BuildServiceProvider()
-        {
             var serviceCollection = GetServiceColletion();
             var serviceProvider = serviceCollection.BuildServiceProvider();
-            serviceProvider.GetService<ILoggerFactory>()
-                .AddNLog()
-                .ConfigureNLog("nlog.config");
-                
-            return serviceProvider;
+
+            var logger = serviceProvider.GetService<ILogger<Program>>();
+            var iotHubClient = serviceProvider.GetService<IotHubClient>();
+            var runTask = iotHubClient.Run();
+
+            Console.WriteLine("Press any key to close");
+            Console.ReadKey();
+
+            iotHubClient.Stop();
+            logger.LogInformation("Stopping...");
+
+            runTask.Wait(Convert.ToInt16(TimeSpan.FromSeconds(3).TotalMilliseconds));
+            logger.LogInformation("Stopped");
         }
+
         public static IServiceCollection GetServiceColletion()
         {
             var serviceCollection = new ServiceCollection();
+            var loggerFactory = new LoggerFactory();
+            loggerFactory
+                .AddNLog()
+                .ConfigureNLog("nlog.config");
+            serviceCollection.AddSingleton<ILoggerFactory>(loggerFactory);
+
             serviceCollection.AddLogging();
 
             var configuration = GetConfiguration();
